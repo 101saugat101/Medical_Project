@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Text, Date, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from datetime import date
 
 # Database setup
 DATABASE_URL = "postgresql://postgres:heheboii420@localhost/medical_feild"
@@ -48,12 +49,6 @@ class PatientCreate(BaseModel):
     age: int
     gender: str
 
-class PatientHistoryCreate(BaseModel):
-    patient_id: int
-    visit_date: str
-    problem: str
-    solution: str
-
 class CurrentProblemCreate(BaseModel):
     patient_id: int
     problem: str
@@ -75,27 +70,24 @@ async def create_patient(patient: PatientCreate, db: SessionLocal = Depends(get_
     db.refresh(new_patient)
     return new_patient
 
-@app.post("/patients/history/")
-async def add_patient_history(history: PatientHistoryCreate, db: SessionLocal = Depends(get_db)):
-    patient = db.query(Patient).filter(Patient.id == history.patient_id).first()
-    if not patient:
-        raise HTTPException(status_code=404, detail="Patient not found")
-    new_history = PatientHistory(
-        patient_id=history.patient_id,
-        visit_date=history.visit_date,
-        problem=history.problem,
-        solution=history.solution,
-    )
-    db.add(new_history)
-    db.commit()
-    db.refresh(new_history)
-    return new_history
-
 @app.post("/patients/current-problem/")
 async def add_current_problem(problem: CurrentProblemCreate, db: SessionLocal = Depends(get_db)):
     patient = db.query(Patient).filter(Patient.id == problem.patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+
+    # Save existing current problem to history if it exists
+    if patient.current_problem:
+        new_history = PatientHistory(
+            patient_id=patient.id,
+            visit_date=date.today(),  # Automatically use today's date for history
+            problem=patient.current_problem.problem,
+            solution="Pending"
+        )
+        db.add(new_history)
+        db.delete(patient.current_problem)  # Remove the current problem
+
+    # Add new current problem
     new_problem = CurrentProblem(patient_id=problem.patient_id, problem=problem.problem)
     db.add(new_problem)
     db.commit()
@@ -123,3 +115,8 @@ async def get_patient_details(patient_id: int, db: SessionLocal = Depends(get_db
             for history in patient.histories
         ],
     }
+
+# Disable editing patient history
+@app.post("/patients/history/", include_in_schema=False)
+async def add_patient_history():
+    raise HTTPException(status_code=403, detail="Editing patient history is not allowed.")
