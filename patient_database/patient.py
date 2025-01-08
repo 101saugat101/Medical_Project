@@ -18,8 +18,10 @@ class Patient(Base):
     name = Column(String, nullable=False)
     age = Column(Integer)
     gender = Column(String)
+    summary = Column(Text)  # New column for summary
     histories = relationship("PatientHistory", back_populates="patient")
     current_problem = relationship("CurrentProblem", uselist=False, back_populates="patient")
+
 
 class PatientHistory(Base):
     __tablename__ = "patient_history"
@@ -28,7 +30,9 @@ class PatientHistory(Base):
     visit_date = Column(Date, nullable=False)
     problem = Column(Text)
     solution = Column(Text)
+    summary = Column(Text)  # New column for summary
     patient = relationship("Patient", back_populates="histories")
+
 
 class CurrentProblem(Base):
     __tablename__ = "current_problem"
