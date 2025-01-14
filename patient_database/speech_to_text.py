@@ -1,13 +1,10 @@
+# ! pip install git+https://github.com/huggingface/transformers -q 
+
 from transformers import pipeline
 
-model = pipeline("automatic-speech-recognition")
+whisper = pipeline('automatic-speech-recognition', model = 'openai/whisper-medium', device = 0)
 
-input = model("/content/speech_transciption.mp3")
-transcription_text = input['text']
+# Pass return_timestamps=True to the pipeline call
+text = whisper('/content/speech_transciption.mp3', return_timestamps=True) 
 
-# Save the transcription to a .txt file
-output_file = "/content/transcription_output.txt"  # Specify the output file path
-with open(output_file, "w", encoding="utf-8") as file:
-    file.write(transcription_text)
-
-print(f"Transcription saved to {output_file}")
+print(text['text'])

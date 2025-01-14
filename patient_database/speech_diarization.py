@@ -12,6 +12,7 @@ import contextlib
 from sklearn.cluster import AgglomerativeClustering
 import numpy as np
 import json
+import csv
 
 
 # upload audio file
@@ -74,9 +75,29 @@ for (i, segment) in enumerate(segments):
     transcript.append({"speaker": segment["speaker"], "start": str(time(segment["start"])), "text": ""})
   transcript[-1]["text"] += segment["text"][1:] + ' '
 
-# # Save the transcript to a JSON file
-# with open('transcript.json', 'w') as f:
-#     json.dump(transcript, f, indent=4)
+# Save the transcript to a JSON file
+with open('transcript.json', 'w') as f:
+    json.dump(transcript, f, indent=4)
 
 # # Download the JSON file
 # files.download('transcript.json')
+
+
+
+# Load the diarized JSON file
+with open('transcript.json', 'r') as f:
+    data = json.load(f)
+
+# # Combine the dialogue with newline formatting for each speaker
+# conversation = ""
+# for segment in data:
+#     speaker = segment["speaker"].replace("SPEAKER ", "")
+#     text = segment["text"].strip()
+#     conversation += f"{speaker}: {text}\n"
+
+# # Write to a single row CSV with newlines within the cell
+# with open('transcript_multiline_row.csv', 'w', newline='') as csvfile:
+#     writer = csv.writer(csvfile)
+#     writer.writerow([conversation.strip()])  # Use .strip() to remove trailing newline
+
+# print("CSV file 'transcript_multiline_row.csv' created successfully.")
