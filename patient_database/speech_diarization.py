@@ -1,4 +1,4 @@
-from google.colab import files
+
 import whisper
 import datetime
 import subprocess
