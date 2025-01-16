@@ -17,7 +17,6 @@ from datetime import datetime
 import random
 
 # Database URL for PostgreSQL
-# Replace the below URL with your actual PostgreSQL credentials
 database_url = "postgresql://postgres:heheboii420@localhost/patients_db"
 
 # SQLAlchemy setup
@@ -184,6 +183,7 @@ def list_patients():
     with SessionLocal() as db_session:
         patient_service = PatientService(db_session)
         return patient_service.get_all_patients()
+
 
 @app.get("/patients/{patient_uuid}", response_model=List[PatientResponse])
 def get_patient(patient_uuid: str):
