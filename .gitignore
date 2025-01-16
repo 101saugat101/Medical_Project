@@ -3,4 +3,5 @@ requirements.txt
 patient1.py
 
 patient_database/patient.py
+medical db/__pycache__
 
