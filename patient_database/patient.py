@@ -6,6 +6,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import date
 import hashlib
 
+
 # Database configuration
 DATABASE_URL = "postgresql://postgres:heheboii420@localhost/patient"
 engine = create_engine(DATABASE_URL)
