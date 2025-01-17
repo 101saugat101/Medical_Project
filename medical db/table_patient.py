@@ -7,14 +7,205 @@
 # #database_url = "postgresql://postgres:heheboii420@localhost/patients_db"
 
 
-from fastapi import FastAPI, HTTPException
+# from fastapi import FastAPI, HTTPException
+# from pydantic import BaseModel
+# from typing import List
+# from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
+# from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.orm import sessionmaker, relationship
+# from datetime import datetime
+# import random
+
+# # Database URL for PostgreSQL
+# database_url = "postgresql://postgres:heheboii420@localhost/patients_db"
+
+# # SQLAlchemy setup
+# Base = declarative_base()
+# engine = create_engine(database_url)
+# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# # Define the PatientDetails model for the patient table
+# class PatientDetails(Base):
+#     __tablename__ = "patient_details"
+#     patient_uuid = Column(String, primary_key=True, index=True)  # Unique identifier for patients
+#     name = Column(String, index=True)  # Patient's name
+#     age = Column(Integer)  # Patient's age
+#     gender = Column(String)  # Patient's gender
+#     phone_number = Column(String)  # Patient's phone number
+    
+#     # Relationship to client_db table (One-to-One relationship)
+#     client_info = relationship("ClientDb", back_populates="patient_details", uselist=False)
+
+# # Define the ClientDb model for the client-specific data table
+# class ClientDb(Base):
+#     __tablename__ = "client_db"
+#     id = Column(Integer, primary_key=True, index=True)
+#     problem_description = Column(String)  # Description of the patient's problem
+#     summary = Column(String)  # Summary of the visit or case
+#     patient_uuid = Column(String, ForeignKey('patient_details.patient_uuid'))  # Foreign key to the patient_details table
+#     date = Column(DateTime, default=datetime.utcnow)  # Full DateTime for the visit
+    
+#     # Relationship back to PatientDetails
+#     patient_details = relationship("PatientDetails", back_populates="client_info")
+
+# # Create the database tables if they don't exist
+# Base.metadata.create_all(bind=engine)
+
+# # Pydantic models for request validation and response formatting
+# class PatientCreate(BaseModel):
+#     name: str
+#     age: int
+#     gender: str
+#     phone_number: str
+#     problem_description: str
+#     summary: str
+
+# class PatientResponse(PatientCreate):
+#     patient_uuid: str
+#     date: datetime
+
+#     class Config:
+#         orm_mode = True  # Enables ORM compatibility for response models
+
+# # Service layer to manage patient-related database operations
+# class PatientService:
+#     def __init__(self, db_session):
+#         self.db_session = db_session
+
+#     def generate_numeric_uuid(self):
+#         """
+#         Generate a unique numeric UUID.
+#         """
+#         while True:
+#             new_uuid = str(random.randint(1000000000, 9999999999))  # Generate a 10-digit number
+#             if not self.db_session.query(PatientDetails).filter(PatientDetails.patient_uuid == new_uuid).first():
+#                 return new_uuid
+
+#     def get_or_create_patient(self, patient_data: PatientCreate):
+#         """
+#         Check if a patient already exists (based on name, age, and gender).
+#         If found, add a new visit entry with the same UUID.
+#         Otherwise, create a new patient with a unique numeric UUID.
+#         """
+#         existing_patient = self.db_session.query(PatientDetails).filter(
+#             PatientDetails.name == patient_data.name,
+#             PatientDetails.age == patient_data.age,
+#             PatientDetails.gender == patient_data.gender
+#         ).first()
+
+#         if existing_patient:
+#             # Create a new entry in the client_db for the existing patient
+#             new_client_record = ClientDb(
+#                 patient_uuid=existing_patient.patient_uuid,
+#                 problem_description=patient_data.problem_description,
+#                 summary=patient_data.summary
+#             )
+#             self.db_session.add(new_client_record)
+#             self.db_session.commit()
+#             self.db_session.refresh(new_client_record)
+#             return new_client_record
+
+#         # Create a new patient record
+#         new_patient_uuid = self.generate_numeric_uuid()
+#         new_patient = PatientDetails(
+#             patient_uuid=new_patient_uuid,
+#             name=patient_data.name,
+#             age=patient_data.age,
+#             gender=patient_data.gender,
+#             phone_number=patient_data.phone_number
+#         )
+#         self.db_session.add(new_patient)
+#         self.db_session.commit()
+#         self.db_session.refresh(new_patient)
+
+#         # Create a new client record linked to the patient
+#         new_client_record = ClientDb(
+#             patient_uuid=new_patient.patient_uuid,
+#             problem_description=patient_data.problem_description,
+#             summary=patient_data.summary
+#         )
+#         self.db_session.add(new_client_record)
+#         self.db_session.commit()
+#         self.db_session.refresh(new_client_record)
+#         return new_client_record
+
+#     def get_all_patients(self) -> List[PatientDetails]:
+#         """
+#         Retrieve all patients from the database.
+#         """
+#         return self.db_session.query(PatientDetails).all()
+
+#     def get_patient_by_uuid(self, patient_uuid: str) -> List[ClientDb]:
+#         """
+#         Retrieve all visit records for a specific patient by their UUID.
+#         Raise an HTTPException if no records are found.
+#         """
+#         client_visits = self.db_session.query(ClientDb).filter(ClientDb.patient_uuid == patient_uuid).all()
+#         if not client_visits:
+#             raise HTTPException(status_code=404, detail="Patient not found")
+#         return client_visits
+
+# # FastAPI application setup
+# app = FastAPI()
+
+# @app.post("/patients", response_model=PatientResponse)
+# def create_or_get_patient(patient: PatientCreate):
+#     """
+#     Endpoint to create a new patient or retrieve an existing patient based on input data.
+#     """
+#     with SessionLocal() as db_session:
+#         patient_service = PatientService(db_session)
+#         patient_record = patient_service.get_or_create_patient(patient)
+
+#         # Get the PatientDetails record associated with the ClientDb record
+#         patient_details = db_session.query(PatientDetails).filter(
+#             PatientDetails.patient_uuid == patient_record.patient_uuid
+#         ).first()
+
+#         # Construct the response using data from both PatientDetails and ClientDb
+#         return {
+#             "patient_uuid": patient_details.patient_uuid,
+#             "name": patient_details.name,
+#             "age": patient_details.age,
+#             "gender": patient_details.gender,
+#             "phone_number": patient_details.phone_number,
+#             "problem_description": patient_record.problem_description,
+#             "summary": patient_record.summary,
+#             "date": patient_record.date,
+#         }
+
+
+# @app.get("/patients", response_model=List[PatientResponse])
+# def list_patients():
+#     """
+#     Endpoint to retrieve a list of all patients in the database.
+#     """
+#     with SessionLocal() as db_session:
+#         patient_service = PatientService(db_session)
+#         return patient_service.get_all_patients()
+
+
+# @app.get("/patients/{patient_uuid}", response_model=List[PatientResponse])
+# def get_patient(patient_uuid: str):
+#     """
+#     Endpoint to retrieve all visit records for a specific patient by their UUID.
+#     """
+#     with SessionLocal() as db_session:
+#         patient_service = PatientService(db_session)
+#         patient_visits = patient_service.get_patient_by_uuid(patient_uuid)
+#         return patient_visits
+
+
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from pydantic import BaseModel
 from typing import List
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
+import requests
 import random
+import logging
 
 # Database URL for PostgreSQL
 database_url = "postgresql://postgres:heheboii420@localhost/patients_db"
@@ -27,8 +218,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Define the PatientDetails model for the patient table
 class PatientDetails(Base):
     __tablename__ = "patient_details"
-    uuid = Column(String, primary_key=True, index=True)  # Unique identifier for patients
-    patient_name = Column(String, index=True)  # Patient's name
+    patient_uuid = Column(String, primary_key=True, index=True)  # Unique identifier for patients
+    name = Column(String, index=True)  # Patient's name
     age = Column(Integer)  # Patient's age
     gender = Column(String)  # Patient's gender
     phone_number = Column(String)  # Patient's phone number
@@ -42,7 +233,7 @@ class ClientDb(Base):
     id = Column(Integer, primary_key=True, index=True)
     problem_description = Column(String)  # Description of the patient's problem
     summary = Column(String)  # Summary of the visit or case
-    uuid = Column(String, ForeignKey('patient_details.uuid'))  # Foreign key to the patient_details table
+    patient_uuid = Column(String, ForeignKey('patient_details.patient_uuid'))  # Foreign key to the patient_details table
     date = Column(DateTime, default=datetime.utcnow)  # Full DateTime for the visit
     
     # Relationship back to PatientDetails
@@ -50,22 +241,6 @@ class ClientDb(Base):
 
 # Create the database tables if they don't exist
 Base.metadata.create_all(bind=engine)
-
-# Pydantic models for request validation and response formatting
-class PatientCreate(BaseModel):
-    patient_name: str
-    age: int
-    gender: str
-    phone_number: str
-    problem_description: str
-    summary: str
-
-class PatientResponse(PatientCreate):
-    uuid: str
-    date: datetime
-
-    class Config:
-        orm_mode = True  # Enables ORM compatibility for response models
 
 # Service layer to manage patient-related database operations
 class PatientService:
@@ -78,27 +253,27 @@ class PatientService:
         """
         while True:
             new_uuid = str(random.randint(1000000000, 9999999999))  # Generate a 10-digit number
-            if not self.db_session.query(PatientDetails).filter(PatientDetails.uuid == new_uuid).first():
+            if not self.db_session.query(PatientDetails).filter(PatientDetails.patient_uuid == new_uuid).first():
                 return new_uuid
 
-    def get_or_create_patient(self, patient_data: PatientCreate):
+    def get_or_create_patient(self, patient_data, problem_description: str):
         """
         Check if a patient already exists (based on name, age, and gender).
         If found, add a new visit entry with the same UUID.
         Otherwise, create a new patient with a unique numeric UUID.
         """
         existing_patient = self.db_session.query(PatientDetails).filter(
-            PatientDetails.patient_name == patient_data.patient_name,
-            PatientDetails.age == patient_data.age,
-            PatientDetails.gender == patient_data.gender
+            PatientDetails.name == patient_data["name"],
+            PatientDetails.age == patient_data["age"],
+            PatientDetails.gender == patient_data["gender"]
         ).first()
 
         if existing_patient:
             # Create a new entry in the client_db for the existing patient
             new_client_record = ClientDb(
-                uuid=existing_patient.uuid,
-                problem_description=patient_data.problem_description,
-                summary=patient_data.summary
+                patient_uuid=existing_patient.patient_uuid,
+                problem_description=problem_description,
+                summary=patient_data["summary"]
             )
             self.db_session.add(new_client_record)
             self.db_session.commit()
@@ -108,11 +283,11 @@ class PatientService:
         # Create a new patient record
         new_patient_uuid = self.generate_numeric_uuid()
         new_patient = PatientDetails(
-            uuid=new_patient_uuid,
-            patient_name=patient_data.patient_name,
-            age=patient_data.age,
-            gender=patient_data.gender,
-            phone_number=patient_data.phone_number
+            patient_uuid=new_patient_uuid,
+            name=patient_data["name"],
+            age=patient_data["age"],
+            gender=patient_data["gender"],
+            phone_number=patient_data["phone_number"]
         )
         self.db_session.add(new_patient)
         self.db_session.commit()
@@ -120,77 +295,83 @@ class PatientService:
 
         # Create a new client record linked to the patient
         new_client_record = ClientDb(
-            uuid=new_patient.uuid,
-            problem_description=patient_data.problem_description,
-            summary=patient_data.summary
+            patient_uuid=new_patient.patient_uuid,
+            problem_description=problem_description,
+            summary=patient_data["summary"]
         )
         self.db_session.add(new_client_record)
         self.db_session.commit()
         self.db_session.refresh(new_client_record)
         return new_client_record
 
-    def get_all_patients(self) -> List[PatientDetails]:
-        """
-        Retrieve all patients from the database.
-        """
-        return self.db_session.query(PatientDetails).all()
-
-    def get_patient_by_uuid(self, patient_uuid: str) -> List[ClientDb]:
-        """
-        Retrieve all visit records for a specific patient by their UUID.
-        Raise an HTTPException if no records are found.
-        """
-        client_visits = self.db_session.query(ClientDb).filter(ClientDb.uuid == patient_uuid).all()
-        if not client_visits:
-            raise HTTPException(status_code=404, detail="Patient not found")
-        return client_visits
-
 # FastAPI application setup
 app = FastAPI()
 
-@app.post("/patients", response_model=PatientResponse)
-def create_or_get_patient(patient: PatientCreate):
-    """
-    Endpoint to create a new patient or retrieve an existing patient based on input data.
-    """
-    with SessionLocal() as db_session:
-        patient_service = PatientService(db_session)
-        patient_record = patient_service.get_or_create_patient(patient)
 
-        # Get the PatientDetails record associated with the ClientDb record
-        patient_details = db_session.query(PatientDetails).filter(
-            PatientDetails.uuid == patient_record.uuid
-        ).first()
+@app.post("/patients/audio", response_model=dict)
+async def create_patient_with_audio(
+    name: str = Form(...),
+    age: int = Form(...),
+    gender: str = Form(...),
+    phone_number: str = Form(...),
+    summary: str = Form(...),
+    audio_file: UploadFile = File(...)
+):
+    """
+    Endpoint to create a new patient or retrieve an existing patient based on input data and audio transcription.
+    """
+    try:
+        # Read the content of the uploaded audio file
+        audio_bytes = await audio_file.read()
 
-        # Construct the response using data from both PatientDetails and ClientDb
+        # Prepare the file payload with correct content type
+        files = {
+            "audio": (audio_file.filename, audio_bytes, audio_file.content_type)
+        }
+        # print(audio_bytes)
+
+        # print(files)
+        # Send the audio file to the transcription service
+        transcription_response = requests.post(
+            "http://fs.wiseyak.com:8048/transcribe_english", files=files
+        )
+
+        # Handle transcription service response
+        if transcription_response.status_code != 200:
+            raise HTTPException(
+                status_code=transcription_response.status_code, 
+                detail="Transcription failed"
+            )
+
+        # Extract the transcribed text
+        transcription_result = transcription_response.json()
+        print(transcription_result)
+        # problem_description = transcription_result.get("text", "")
+        problem_description = transcription_result
+
+
+        if not problem_description:
+            raise HTTPException(status_code=400, detail="Transcription service returned no text")
+
+        # Add the patient record with the transcribed text
+        patient_data = {
+            "name": name,
+            "age": age,
+            "gender": gender,
+            "phone_number": phone_number,
+            "summary": summary,
+        }
+
+        with SessionLocal() as db_session:
+            patient_service = PatientService(db_session)
+            patient_record = patient_service.get_or_create_patient(patient_data, transcription_result)
+
         return {
-            "uuid": patient_details.uuid,
-            "patient_name": patient_details.patient_name,
-            "age": patient_details.age,
-            "gender": patient_details.gender,
-            "phone_number": patient_details.phone_number,
-            "problem_description": patient_record.problem_description,
+            "patient_uuid": patient_record.patient_uuid,
+            "problem_description": problem_description,
             "summary": patient_record.summary,
             "date": patient_record.date,
         }
 
-
-@app.get("/patients", response_model=List[PatientResponse])
-def list_patients():
-    """
-    Endpoint to retrieve a list of all patients in the database.
-    """
-    with SessionLocal() as db_session:
-        patient_service = PatientService(db_session)
-        return patient_service.get_all_patients()
-
-
-@app.get("/patients/{patient_uuid}", response_model=List[PatientResponse])
-def get_patient(patient_uuid: str):
-    """
-    Endpoint to retrieve all visit records for a specific patient by their UUID.
-    """
-    with SessionLocal() as db_session:
-        patient_service = PatientService(db_session)
-        patient_visits = patient_service.get_patient_by_uuid(patient_uuid)
-        return patient_visits
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

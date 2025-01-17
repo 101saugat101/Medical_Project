@@ -18,10 +18,10 @@ Base = declarative_base()
 class Doctor(Base):
     __tablename__ = "doctors"
 
-    id = Column(String, primary_key=True, index=True)
-    doctor_name = Column(String, index=True)
-    doctor_age = Column(Integer)
-    doctor_gender = Column(String)
+    doctor_id = Column(String, primary_key=True, index=True)
+    name = Column(String, index=True)
+    age = Column(Integer)
+    gender = Column(String)
     specialised_field = Column(String)
     phone_number = Column(String, nullable=True)
 
@@ -30,9 +30,9 @@ Base.metadata.create_all(bind=engine)
 
 # Pydantic Model for Request Validation
 class DoctorCreate(BaseModel):
-    doctor_name: str
-    doctor_age: int
-    doctor_gender: str
+    name: str
+    age: int
+    gender: str
     specialised_field: str
     phone_number: str | None = None  # Optional phone number
 
@@ -54,9 +54,9 @@ def create_doctor(doctor: DoctorCreate, db: Session = Depends(get_db)):
     # Check if a doctor with the same details (excluding phone number) already exists
     existing_doctor = db.query(Doctor).filter(
         and_(
-            Doctor.doctor_name == doctor.doctor_name,
-            Doctor.doctor_age == doctor.doctor_age,
-            Doctor.doctor_gender == doctor.doctor_gender,
+            Doctor.name == doctor.name,
+            Doctor.age == doctor.age,
+            Doctor.gender == doctor.gender,
             Doctor.specialised_field == doctor.specialised_field,
         )
     ).first()
@@ -65,10 +65,10 @@ def create_doctor(doctor: DoctorCreate, db: Session = Depends(get_db)):
 
     # Create a new doctor entry
     new_doctor = Doctor(
-        id=generate_numeric_uuid(),
-        doctor_name=doctor.doctor_name,
-        doctor_age=doctor.doctor_age,
-        doctor_gender=doctor.doctor_gender,
+        doctor_id=generate_numeric_uuid(),
+        name=doctor.name,
+        age=doctor.age,
+        gender=doctor.gender,
         specialised_field=doctor.specialised_field,
         phone_number=doctor.phone_number,
     )
