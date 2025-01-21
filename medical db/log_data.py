@@ -10,18 +10,18 @@ import uuid
 app = FastAPI()
 
 # Database Configuration
-DATABASE_URL = "postgresql://postgres:heheboii420@localhost/conversation_db"  # Replace with actual credentials
+DATABASE_URL = "postgresql://postgres:heheboii420@localhost/logs"  # Replace with actual credentials
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # Conversation Table Definition
 class Conversation(Base):
-    __tablename__ = "conversations"
+    __tablename__ = "log_table"
 
-    id = Column(String, primary_key=True, index=True)  # Unique numeric UUID
-    patient_uuid = Column(String, nullable=False, index=True)  # UUID for the patient
-    doctor_uuid = Column(String, nullable=False, index=True)  # UUID for the doctor
+    session_id = Column(String, primary_key=True, index=True)  # Unique numeric UUID
+    patient_id = Column(String, nullable=False, index=True)  # UUID for the patient
+    doctor_id = Column(String, nullable=False, index=True)  # UUID for the doctor
     conversation = Column(String, nullable=False)
     summary = Column(String, nullable=True)
     feedback = Column(String, nullable=True)
@@ -55,9 +55,9 @@ def generate_numeric_uuid():
 def add_conversation(conversation_data: ConversationCreate, db: Session = Depends(get_db)):
     # Create a new conversation entry
     new_conversation = Conversation(
-        id=generate_numeric_uuid(),
-        patient_uuid=conversation_data.patient_uuid,
-        doctor_uuid=conversation_data.doctor_uuid,
+        session_id=generate_numeric_uuid(),
+        patient_id=conversation_data.patient_uuid,
+        doctor_id=conversation_data.doctor_uuid,
         conversation=conversation_data.conversation,
         summary=conversation_data.summary,
         feedback=conversation_data.feedback,
@@ -67,9 +67,3 @@ def add_conversation(conversation_data: ConversationCreate, db: Session = Depend
     db.commit()
     db.refresh(new_conversation)
     return {"message": "Conversation added successfully", "conversation": new_conversation}
-
-# API Endpoint to Get All Conversations
-@app.get("/conversations/")
-def get_all_conversations(db: Session = Depends(get_db)):
-    conversations = db.query(Conversation).all()
-    return {"conversations": conversations}
