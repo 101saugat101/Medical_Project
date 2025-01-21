@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Depends, HTTPException
+
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy import Column, String, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
 from datetime import datetime
 import uuid
+import requests
 
 # Initialize FastAPI
 app = FastAPI()
@@ -34,9 +36,7 @@ Base.metadata.create_all(bind=engine)
 class ConversationCreate(BaseModel):
     patient_uuid: str  # Patient's unique identifier
     doctor_uuid: str  # Doctor's unique identifier
-    conversation: str
-    summary: str | None = None
-    feedback: str | None = None
+    summary: str | None = None  # Optional summary field
 
 # Dependency to Get DB Session
 def get_db():
@@ -50,20 +50,59 @@ def get_db():
 def generate_numeric_uuid():
     return str(uuid.uuid4().int)[:12]
 
+# Transcribe Audio Helper Function
+def transcribe_audio(audio_file: UploadFile):
+    try:
+        audio_bytes = audio_file.file.read()
+        files = {"audio": (audio_file.filename, audio_bytes, audio_file.content_type)}
+        response = requests.post("http://fs.wiseyak.com:8048/transcribe_english", files=files)
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail="Transcription failed")
+
+        return response.json()  # Assumes transcription result is in JSON format
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error during transcription: {str(e)}")
+
 # API Endpoint to Add a Conversation
 @app.post("/conversations/")
-def add_conversation(conversation_data: ConversationCreate, db: Session = Depends(get_db)):
-    # Create a new conversation entry
-    new_conversation = Conversation(
-        session_id=generate_numeric_uuid(),
-        patient_id=conversation_data.patient_uuid,
-        doctor_id=conversation_data.doctor_uuid,
-        conversation=conversation_data.conversation,
-        summary=conversation_data.summary,
-        feedback=conversation_data.feedback,
-        date_time=datetime.utcnow(),
-    )
-    db.add(new_conversation)
-    db.commit()
-    db.refresh(new_conversation)
-    return {"message": "Conversation added successfully", "conversation": new_conversation}
+def add_conversation(
+    patient_uuid: str,
+    doctor_uuid: str,
+    audio_conversation: UploadFile = File(...),
+    audio_feedback: UploadFile = File(...),
+    summary: str | None = None,
+    db: Session = Depends(get_db),
+):
+    try:
+        # Transcribe conversation audio
+        conversation_transcription = transcribe_audio(audio_conversation)
+        # Transcribe feedback audio
+        feedback_transcription = transcribe_audio(audio_feedback)
+
+        # Create a new conversation entry
+        new_conversation = Conversation(
+            session_id=generate_numeric_uuid(),
+            patient_id=patient_uuid,
+            doctor_id=doctor_uuid,
+            conversation=conversation_transcription,
+            summary=summary,
+            feedback=feedback_transcription,
+            date_time=datetime.utcnow(),
+        )
+        db.add(new_conversation)
+        db.commit()
+        db.refresh(new_conversation)
+
+        return {
+            "message": "Conversation added successfully",
+            "conversation": {
+                "session_id": new_conversation.session_id,
+                "conversation": new_conversation.conversation,
+                "feedback": new_conversation.feedback,
+                "summary": new_conversation.summary,
+                "date_time": new_conversation.date_time,
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error adding conversation: {str(e)}")
