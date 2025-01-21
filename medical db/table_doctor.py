@@ -5,16 +5,13 @@ from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel
 import uuid
 
-# Initialize FastAPI
 app = FastAPI()
 
-# Database Configuration
 DATABASE_URL = "postgresql://postgres:heheboii420@localhost/doctors_db"  # Replace with actual credentials
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Doctor Table Definition
 class Doctor(Base):
     __tablename__ = "doctors"
 
@@ -25,7 +22,6 @@ class Doctor(Base):
     specialised_field = Column(String)
     phone_number = Column(String, nullable=True)
 
-# Create Database Tables
 Base.metadata.create_all(bind=engine)
 
 # Pydantic Model for Request Validation
@@ -84,4 +80,3 @@ def get_all_doctors(db: Session = Depends(get_db)):
     return {"doctors": doctors}
 
 
-# \\DATABASE_URL = "postgresql://postgres:heheboii420@localhost/doctors_db"

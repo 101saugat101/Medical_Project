@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import requests
 
-# Database URL for PostgreSQL
 database_url = "postgresql://postgres:heheboii420@localhost/patients_db"
 
 # SQLAlchemy setup
@@ -13,12 +12,11 @@ Base = declarative_base()
 engine = create_engine(database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Import the PatientDetails model definition
 class PatientDetails(Base):
     __tablename__ = "patient_details"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    uuid = Column(String, unique=True, index=True)  # Changed from patient_uuid to uuid
+    uuid = Column(String, unique=True, index=True) 
     email = Column(String, unique=True, index=True)
     password = Column(String)
     name = Column(String)
@@ -27,7 +25,6 @@ class PatientDetails(Base):
     phone_number = Column(String)
     problems = relationship("PatientProblem", back_populates="patient")
 
-# Define the PatientProblem model for storing problems
 class PatientProblem(Base):
     __tablename__ = "patient_problems"
     
@@ -111,7 +108,7 @@ async def record_patient_problem(
         db.refresh(new_problem)
         
         return {
-            "uuid": patient.uuid,  # Changed from patient_uuid to uuid
+            "uuid": patient.uuid,  
             "problem_id": new_problem.id,
             "problem_description": new_problem.problem_description,
             "summary": new_problem.summary,
@@ -122,5 +119,3 @@ async def record_patient_problem(
         raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# Run with: uvicorn patient_problem:app --host 0.0.0.0 --port 8087 --reload

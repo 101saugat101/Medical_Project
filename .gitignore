@@ -6,3 +6,4 @@ patient_database/patient.py
 medical db/__pycache__
 .pyc
 
+conversation.py
