@@ -13,9 +13,11 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 class Doctor(Base):
-    __tablename__ = "doctors"
+    __tablename__ = "doctor_details"
 
     doctor_id = Column(String, primary_key=True, index=True)
+    email=Column(String, nullable=False, index=True)
+    password=Column(String, nullable=False)
     name = Column(String, index=True)
     age = Column(Integer)
     gender = Column(String)
@@ -26,6 +28,8 @@ Base.metadata.create_all(bind=engine)
 
 # Pydantic Model for Request Validation
 class DoctorCreate(BaseModel):
+    email: str
+    password: str
     name: str
     age: int
     gender: str
@@ -43,25 +47,18 @@ def get_db():
 # Generate a Numeric UUID
 def generate_numeric_uuid():
     return str(uuid.uuid4().int)[:12]
-
-# API Endpoint to Create a Doctor
-@app.post("/doctors/")
+@app.post("/doctor_details/")
 def create_doctor(doctor: DoctorCreate, db: Session = Depends(get_db)):
-    # Check if a doctor with the same details (excluding phone number) already exists
-    existing_doctor = db.query(Doctor).filter(
-        and_(
-            Doctor.name == doctor.name,
-            Doctor.age == doctor.age,
-            Doctor.gender == doctor.gender,
-            Doctor.specialised_field == doctor.specialised_field,
-        )
-    ).first()
-    if existing_doctor:
-        raise HTTPException(status_code=400, detail="Doctor with these details already exists.")
+    # Check if a doctor with the same email already exists
+    existing_email = db.query(Doctor).filter(Doctor.email == doctor.email).first()
+    if existing_email:
+        raise HTTPException(status_code=400, detail="A doctor with this email already exists.")
 
     # Create a new doctor entry
     new_doctor = Doctor(
         doctor_id=generate_numeric_uuid(),
+        email=doctor.email,
+        password=doctor.password,
         name=doctor.name,
         age=doctor.age,
         gender=doctor.gender,
@@ -73,10 +70,10 @@ def create_doctor(doctor: DoctorCreate, db: Session = Depends(get_db)):
     db.refresh(new_doctor)
     return {"message": "Doctor added successfully", "doctor": new_doctor}
 
-# API Endpoint to Get All Doctors
-@app.get("/doctors/")
-def get_all_doctors(db: Session = Depends(get_db)):
-    doctors = db.query(Doctor).all()
-    return {"doctors": doctors}
+# # API Endpoint to Get All Doctors
+# @app.get("/doctor_details/")
+# def get_all_doctors(db: Session = Depends(get_db)):
+#     doctor_details = db.query(Doctor).all()
+#     return {"doctor_details": doctor_details}
 
 
