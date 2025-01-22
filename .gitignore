@@ -7,3 +7,6 @@ medical db/__pycache__
 .pyc
 
 conversation.py
+token_for_jwt.py
+
+
