@@ -15,7 +15,7 @@ class PatientDetails(Base):
     __tablename__ = "patient_details"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    uuid = Column(String, unique=True, index=True)  # Numeric UUID
+    patient_id = Column(String, unique=True, index=True)  # Numeric UUID
     email = Column(String, unique=True, index=True)  # Unique email
     password = Column(String)  # Password field
     name = Column(String)
@@ -47,7 +47,7 @@ class PatientService:
         """Generate a unique numeric UUID."""
         while True:
             new_uuid = str(random.randint(1000000000, 9999999999))  # 10-digit number
-            if not self.db_session.query(PatientDetails).filter(PatientDetails.uuid == new_uuid).first():
+            if not self.db_session.query(PatientDetails).filter(PatientDetails.patient_id == new_uuid).first():
                 return new_uuid
 
     def create_patient(self, patient_data: PatientCreate):
@@ -58,7 +58,7 @@ class PatientService:
 
         # Create new patient with generated UUID
         new_patient = PatientDetails(
-            uuid=self.generate_numeric_uuid(),
+            patient_id=self.generate_numeric_uuid(),
             email=patient_data.email,
             password=patient_data.password,  # Note: In production, this should be hashed
             name=patient_data.name,
@@ -100,7 +100,7 @@ async def register_patient(
             patient = patient_service.create_patient(patient_data)
 
         return {
-            "uuid": patient.uuid,
+            "patient_id": patient.patient_id,
             "email": patient.email,
             "name": patient.name,
             "age": patient.age,
