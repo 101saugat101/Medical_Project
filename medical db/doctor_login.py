@@ -86,27 +86,24 @@
 #             "specialised_field": doctor.specialised_field,
 #         }
 #     }
-
-
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy import Column, Integer, String, create_engine, DateTime
+from fastapi import FastAPI, Depends, HTTPException, Form
+from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from pydantic import BaseModel
 from datetime import datetime
-import uuid
+import random
 
 # Initialize FastAPI
 app = FastAPI()
 
 # Doctor Database Configuration
-DOCTOR_DATABASE_URL = "postgresql://postgres:heheboii420@localhost/doctors_db"  # Replace with actual credentials
+DOCTOR_DATABASE_URL = "postgresql://postgres:heheboii420@localhost/doctors_db"
 doctor_engine = create_engine(DOCTOR_DATABASE_URL)
 DoctorSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=doctor_engine)
 DoctorBase = declarative_base()
 
 # Log Database Configuration
-LOG_DATABASE_URL = "postgresql://postgres:heheboii420@localhost/logs"  # Replace with actual credentials
+LOG_DATABASE_URL = "postgresql://postgres:heheboii420@localhost/logs"
 log_engine = create_engine(LOG_DATABASE_URL)
 LogSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=log_engine)
 LogBase = declarative_base()
@@ -126,17 +123,14 @@ class Doctor(DoctorBase):
 
 DoctorBase.metadata.create_all(bind=doctor_engine)
 
-# Log Table Definition
-class Conversation(LogBase):
-    __tablename__ = "log_table"
+# LogsHistory Table Definition
+class LogsHistory(LogBase):
+    __tablename__ = "logs_history"
 
-    session_id = Column(String, primary_key=True, index=True)  # Unique numeric UUID
-    patient_id = Column(String, nullable=False, index=True)  # UUID for the patient
-    doctor_id = Column(String, nullable=False, index=True)  # UUID for the doctor
-    conversation = Column(String, nullable=False)
-    summary = Column(String, nullable=True)
-    feedback = Column(String, nullable=True)
-    date_time = Column(DateTime, default=datetime.utcnow)
+    session_id = Column(Integer, primary_key=True, index=True)  # Numeric session ID
+    email = Column(String, nullable=False, index=True)          # Doctor's email
+    logged_in_date = Column(DateTime, nullable=False)           # Login date and time
+    logged_out_date = Column(DateTime, nullable=True)           # Logout date and time
 
 LogBase.metadata.create_all(bind=log_engine)
 
@@ -155,74 +149,72 @@ def get_log_db():
     finally:
         db.close()
 
-# Pydantic Models
-class DoctorLogin(BaseModel):
-    email: str
-    password: str
+# Helper function to generate numeric session IDs
+def generate_session_id():
+    return random.randint(100000, 999999)
 
-# Endpoint to Login a Doctor
+# In-memory store for authenticated doctors
+authenticated_doctors = {}
+
+# POST: Doctor Login and Create Log
 @app.post("/doctor/login/")
-def login_doctor(credentials: DoctorLogin, db: Session = Depends(get_doctor_db)):
-    # Check if the doctor with the provided email exists
-    doctor = db.query(Doctor).filter(Doctor.email == credentials.email).first()
-    if not doctor or doctor.password != credentials.password:
+def login_doctor(
+    email: str = Form(...),  # Input email as form data
+    password: str = Form(...),  # Input password as form data
+    db: Session = Depends(get_doctor_db),
+    logs_db: Session = Depends(get_log_db),
+):
+    # Authenticate doctor
+    doctor = db.query(Doctor).filter(Doctor.email == email.strip()).first()
+    if not doctor or doctor.password != password:
         raise HTTPException(status_code=404, detail="Incorrect email or password")
 
-    # Return success response
+    # Generate a unique numeric session ID
+    session_id = generate_session_id()
+    authenticated_doctors[session_id] = email
+
+    # Save login in logs_history table
+    log_entry = LogsHistory(
+        session_id=session_id,
+        email=email,
+        logged_in_date=datetime.utcnow(),
+        logged_out_date=None
+    )
+    logs_db.add(log_entry)
+    logs_db.commit()
+    logs_db.refresh(log_entry)
+
     return {
         "message": "Login successful",
-        "doctor": {
-            "doctor_id": doctor.doctor_id,
-            "email": doctor.email,
-            "name": doctor.name,
-            "specialised_field": doctor.specialised_field,
-        }
+        "session_id": session_id,
+        "email": email
     }
 
-# New Endpoint to Get Log Data by Doctor ID
-@app.get("/doctor/{doctor_id}/logs/")
-def get_logs_by_doctor_id(doctor_id: str, db: Session = Depends(get_log_db)):
-    # Query logs based on doctor_id
-    logs = db.query(Conversation).filter(Conversation.doctor_id == doctor_id).all()
-    if not logs:
-        raise HTTPException(status_code=404, detail="No logs found for this doctor ID")
+# POST: Doctor Logout and Update Log
+@app.post("/doctor/logout/")
+def logout_doctor(logs_db: Session = Depends(get_log_db)):
+    # Ensure there is at least one authenticated doctor
+    if not authenticated_doctors:
+        raise HTTPException(status_code=401, detail="No doctor is currently logged in")
 
-    # Format and return the logs
+    # Get the latest session ID and email
+    session_id, email = list(authenticated_doctors.items())[-1]
+
+    # Update the logout time in logs_history table
+    log_entry = logs_db.query(LogsHistory).filter(
+        LogsHistory.session_id == session_id
+    ).first()
+    if not log_entry:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+
+    log_entry.logged_out_date = datetime.utcnow()
+    logs_db.commit()
+
+    # Remove the session from authenticated doctors
+    authenticated_doctors.pop(session_id, None)
+
     return {
-        "doctor_id": doctor_id,
-        "logs": [
-            {
-                "session_id": log.session_id,
-                "patient_id": log.patient_id,
-                "conversation": log.conversation,
-                "summary": log.summary,
-                "feedback": log.feedback,
-                "date_time": log.date_time,
-            }
-            for log in logs
-        ],
+        "message": "Logout successful",
+        "session_id": session_id,
+        "email": email
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

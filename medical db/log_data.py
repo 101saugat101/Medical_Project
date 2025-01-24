@@ -64,9 +64,52 @@ def transcribe_audio(audio_file: UploadFile):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during transcription: {str(e)}")
 
+# # API Endpoint to Add a Conversation
+# @app.post("/conversations/")
+# def add_conversation(
+#     patient_uuid: str,
+#     doctor_uuid: str,
+#     audio_conversation: UploadFile = File(...),
+#     audio_feedback: UploadFile = File(...),
+#     summary: str | None = None,
+#     db: Session = Depends(get_db),
+# ):
+#     try:
+#         # Transcribe conversation audio
+#         conversation_transcription = transcribe_audio(audio_conversation)
+#         # Transcribe feedback audio
+#         feedback_transcription = transcribe_audio(audio_feedback)
+
+#         # Create a new conversation entry
+#         new_conversation = Conversation(
+#             session_id=generate_numeric_uuid(),
+#             patient_id=patient_uuid,
+#             doctor_id=doctor_uuid,
+#             conversation=conversation_transcription,
+#             summary=summary,
+#             feedback=feedback_transcription,
+#             date_time=datetime.utcnow(),
+#         )
+#         db.add(new_conversation)
+#         db.commit()
+#         db.refresh(new_conversation)
+
+#         return {
+#             "message": "Conversation added successfully",
+#             "conversation": {
+#                 "session_id": new_conversation.session_id,
+#                 "conversation": new_conversation.conversation,
+#                 "feedback": new_conversation.feedback,
+#                 "summary": new_conversation.summary,
+#                 "date_time": new_conversation.date_time,
+#             },
+#         }
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error adding conversation: {str(e)}")
 # API Endpoint to Add a Conversation
 @app.post("/conversations/")
 def add_conversation(
+    session_id: str,
     patient_uuid: str,
     doctor_uuid: str,
     audio_conversation: UploadFile = File(...),
@@ -82,7 +125,7 @@ def add_conversation(
 
         # Create a new conversation entry
         new_conversation = Conversation(
-            session_id=generate_numeric_uuid(),
+            session_id=session_id,
             patient_id=patient_uuid,
             doctor_id=doctor_uuid,
             conversation=conversation_transcription,
