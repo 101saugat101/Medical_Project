@@ -82,6 +82,12 @@ async def register_patient(
     age: int = Form(...),
     gender: str = Form(...),
     phone_number: str = Form(...)
+    #  email: str ,
+    # password: str ,
+    # name: str,
+    # age: int,
+    # gender: str,
+    # phone_number: str
 ):
     """Endpoint to register a new patient."""
     try:

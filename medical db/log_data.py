@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy import Column, String, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -17,11 +16,12 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Conversation Table Definition
-class Conversation(Base):
-    __tablename__ = "log_table"
+# Conversation History Table Definition
+class ConversationHistory(Base):
+    __tablename__ = "conversation_history"
 
-    session_id = Column(String, primary_key=True, index=True)  # Unique numeric UUID
+    meeting_id = Column(String, primary_key=True, index=True)  # Unique numeric UUID
+    session_id = Column(String, unique=True, index=True)  # Unique session ID
     patient_id = Column(String, nullable=False, index=True)  # UUID for the patient
     doctor_id = Column(String, nullable=False, index=True)  # UUID for the doctor
     conversation = Column(String, nullable=False)
@@ -46,7 +46,7 @@ def get_db():
     finally:
         db.close()
 
-# Generate a Numeric UUID
+# Generate a Numeric UUID (12 digits)
 def generate_numeric_uuid():
     return str(uuid.uuid4().int)[:12]
 
@@ -64,49 +64,6 @@ def transcribe_audio(audio_file: UploadFile):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during transcription: {str(e)}")
 
-# # API Endpoint to Add a Conversation
-# @app.post("/conversations/")
-# def add_conversation(
-#     patient_uuid: str,
-#     doctor_uuid: str,
-#     audio_conversation: UploadFile = File(...),
-#     audio_feedback: UploadFile = File(...),
-#     summary: str | None = None,
-#     db: Session = Depends(get_db),
-# ):
-#     try:
-#         # Transcribe conversation audio
-#         conversation_transcription = transcribe_audio(audio_conversation)
-#         # Transcribe feedback audio
-#         feedback_transcription = transcribe_audio(audio_feedback)
-
-#         # Create a new conversation entry
-#         new_conversation = Conversation(
-#             session_id=generate_numeric_uuid(),
-#             patient_id=patient_uuid,
-#             doctor_id=doctor_uuid,
-#             conversation=conversation_transcription,
-#             summary=summary,
-#             feedback=feedback_transcription,
-#             date_time=datetime.utcnow(),
-#         )
-#         db.add(new_conversation)
-#         db.commit()
-#         db.refresh(new_conversation)
-
-#         return {
-#             "message": "Conversation added successfully",
-#             "conversation": {
-#                 "session_id": new_conversation.session_id,
-#                 "conversation": new_conversation.conversation,
-#                 "feedback": new_conversation.feedback,
-#                 "summary": new_conversation.summary,
-#                 "date_time": new_conversation.date_time,
-#             },
-#         }
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Error adding conversation: {str(e)}")
-# API Endpoint to Add a Conversation
 @app.post("/conversations/")
 def add_conversation(
     session_id: str,
@@ -118,13 +75,17 @@ def add_conversation(
     db: Session = Depends(get_db),
 ):
     try:
+        # Generate meeting_id as unique numeric UUID
+        meeting_id = generate_numeric_uuid()
+
         # Transcribe conversation audio
         conversation_transcription = transcribe_audio(audio_conversation)
         # Transcribe feedback audio
         feedback_transcription = transcribe_audio(audio_feedback)
 
         # Create a new conversation entry
-        new_conversation = Conversation(
+        new_conversation = ConversationHistory(
+            meeting_id=meeting_id,
             session_id=session_id,
             patient_id=patient_uuid,
             doctor_id=doctor_uuid,
@@ -140,6 +101,7 @@ def add_conversation(
         return {
             "message": "Conversation added successfully",
             "conversation": {
+                "meeting_id": new_conversation.meeting_id,
                 "session_id": new_conversation.session_id,
                 "conversation": new_conversation.conversation,
                 "feedback": new_conversation.feedback,
