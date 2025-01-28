@@ -251,6 +251,12 @@ from sqlalchemy import create_engine, Column, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 
+
+
+from fastapi.middleware.cors import CORSMiddleware
+
+
+
 # Database URLs
 PATIENT_DATABASE_URL = "postgresql://postgres:heheboii420@localhost/patients_db"
 DOCTOR_DATABASE_URL = "postgresql://postgres:heheboii420@localhost/doctors_db"
@@ -301,6 +307,32 @@ DoctorSessionLocal = sessionmaker(bind=doctor_engine)
 
 # FastAPI app
 app = FastAPI()
+
+
+
+
+origins = [
+    "http://localhost:8000",  # Local React development server
+    
+]
+
+# Add CORS middleware to the FastAPI app
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Allow specified origins
+    allow_credentials=True,  # Allow cookies and credentials
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
+
+
+
+
+
+
+
+
 
 # Database dependency
 def get_patient_db():
