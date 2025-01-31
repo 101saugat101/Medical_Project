@@ -426,10 +426,18 @@ from datetime import datetime
 import random
 from doctor_dashboard import get_doctor_details, get_assigned_patients, get_doctor_db, get_receptionist_db, get_patient_db, Doctor
 from fastapi.middleware.cors import CORSMiddleware
+
+#this is for views.py import
+from fastapi import FastAPI, Depends
+import asyncpg
+from pydantic import BaseModel
+from typing import List, Optional
+from views import get_db_connection, DoctorDashboard 
+#############
+
+
 # Initialize FastAPI
 app = FastAPI()
-
-
 
 
 
@@ -450,11 +458,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],  # Allow all headers
 )
-
-
-
-
-
 
 
 
@@ -520,6 +523,24 @@ def get_doctor_info(
         "doctor_details": doctor_details,
         "assigned_patients": assigned_patients
     }
+
+
+
+#Endpoint to fetch doctor details based on doctor_id
+@app.get("/doctor_dashboard/{doctor_id}", response_model=List[DoctorDashboard])
+async def get_doctor_by_id(doctor_id: str):
+    conn = await get_db_connection()
+    query = """
+    SELECT * FROM doctor_dashboard WHERE doctor_id = $1
+    """
+    result = await conn.fetch(query, doctor_id)
+    await conn.close()
+    
+    if not result:
+        return []  # Return empty list if no doctor found
+    
+    return [DoctorDashboard(**row) for row in result]
+
 
 
 # POST: Doctor Logout
