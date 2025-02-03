@@ -27,7 +27,8 @@ class ConversationHistory(Base):
     conversation = Column(String, nullable=False)
     summary = Column(String, nullable=True)
     feedback = Column(String, nullable=True)
-    date_time = Column(DateTime, default=datetime.utcnow)
+    date_time = Colu
+    mn(DateTime, default=datetime.utcnow)
 
 # Create Database Tables
 Base.metadata.create_all(bind=engine)
