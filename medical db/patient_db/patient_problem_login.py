@@ -356,10 +356,79 @@ async def authenticate_patient(
         "email": email
     }
 
-# POST: Record Patient Problem with Transcription
+# # POST: Record Patient Problem with Transcription
+# @app.post("/patient/problem", response_model=dict)
+# async def record_patient_problem(
+#     #summary: str = Form(...),
+#     audio_file: UploadFile = File(...),
+#     db: Session = Depends(get_patients_db)
+# ):
+#     if not authenticated_users:
+#         raise HTTPException(status_code=401, detail="No authenticated user found. Please log in first.")
+
+#     # Get the last authenticated user's session ID and email
+#     session_id, email = list(authenticated_users.items())[-1]
+
+#     # Find patient in database
+#     patient = db.query(PatientDetails).filter(
+#         PatientDetails.email == email
+#     ).first()
+
+#     if not patient:
+#         raise HTTPException(status_code=404, detail="Authenticated patient not found")
+
+#     # Process audio file
+#     audio_bytes = await audio_file.read()
+#     files = {
+#         "audio": (audio_file.filename, audio_bytes, audio_file.content_type)
+#     }
+
+#     # Send to transcription service
+#     transcription_response = requests.post(
+#         "http://fs.wiseyak.com:8048/transcribe_english",
+#         files=files
+#     )
+
+#     if transcription_response.status_code != 200:
+#         raise HTTPException(
+#             status_code=transcription_response.status_code,
+#             detail="Transcription failed"
+#         )
+
+#     # Get transcription result
+#     transcription_result = transcription_response.json()
+
+#     new_problem = PatientProblem(
+#     uuid=str(uuid.uuid4()),
+#     session_id=session_id,
+#     patient_id=patient.patient_id,
+#     problem_description=transcription_result,
+#     # summary=summary
+# )
+
+#     db.add(new_problem)
+#     db.commit()
+#     db.refresh(new_problem)
+
+#     return {
+#         "patient_id": patient.patient_id,
+#         "problem_id": new_problem.uuid,
+#         "problem_description": new_problem.problem_description,
+#         # "summary": new_problem.summary,
+#         "date": new_problem.date
+#     }
+
+
+import os
+
+# Define the path where the audio files will be saved
+AUDIO_SAVE_PATH = r"D:\audio_medical\patient_audiofile"
+
+# Ensure the directory exists
+os.makedirs(AUDIO_SAVE_PATH, exist_ok=True)
+
 @app.post("/patient/problem", response_model=dict)
 async def record_patient_problem(
-    #summary: str = Form(...),
     audio_file: UploadFile = File(...),
     db: Session = Depends(get_patients_db)
 ):
@@ -377,11 +446,14 @@ async def record_patient_problem(
     if not patient:
         raise HTTPException(status_code=404, detail="Authenticated patient not found")
 
-    # Process audio file
-    audio_bytes = await audio_file.read()
-    files = {
-        "audio": (audio_file.filename, audio_bytes, audio_file.content_type)
-    }
+    # Save audio file to local directory
+    file_path = os.path.join(AUDIO_SAVE_PATH, f"{uuid.uuid4()}_{audio_file.filename}")
+    with open(file_path, "wb") as buffer:
+        buffer.write(await audio_file.read())
+
+    # Read the audio file for transcription
+    with open(file_path, "rb") as f:
+        files = {"audio": (audio_file.filename, f.read(), audio_file.content_type)}
 
     # Send to transcription service
     transcription_response = requests.post(
@@ -399,12 +471,11 @@ async def record_patient_problem(
     transcription_result = transcription_response.json()
 
     new_problem = PatientProblem(
-    uuid=str(uuid.uuid4()),
-    session_id=session_id,
-    patient_id=patient.patient_id,
-    problem_description=transcription_result,
-    # summary=summary
-)
+        uuid=str(uuid.uuid4()),
+        session_id=session_id,
+        patient_id=patient.patient_id,
+        problem_description=transcription_result
+    )
 
     db.add(new_problem)
     db.commit()
@@ -414,9 +485,10 @@ async def record_patient_problem(
         "patient_id": patient.patient_id,
         "problem_id": new_problem.uuid,
         "problem_description": new_problem.problem_description,
-        # "summary": new_problem.summary,
+        "audio_file_path": file_path,  # Returning the saved file path
         "date": new_problem.date
     }
+
 
 # POST: Logout Patient
 @app.post("/patient/logout", response_model=dict)

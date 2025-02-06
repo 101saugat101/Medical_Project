@@ -19,7 +19,7 @@ def main():
 
     # 🔹 Load models
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
+    print(f"🚀 Using device: {device}")
     diarization_pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.0",
         use_auth_token="your api for hugging face"
