@@ -494,6 +494,7 @@ def login_doctor(
     
     return {
         "message": f"Login successful and {doctor.doctor_id}",
+        "session_id": session_id,
         "doctor_id": doctor.doctor_id
     }
 

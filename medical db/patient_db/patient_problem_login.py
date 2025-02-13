@@ -256,6 +256,7 @@ class PatientProblem(Base):
     session_id = Column(Integer)
     patient_id = Column(String, ForeignKey('patient_details.patient_id'))
     problem_description = Column(String)
+    audio_file = Column(String, nullable=True)  # Add this column
     summary = Column(String)
     date = Column(DateTime, default=datetime.utcnow)
 
@@ -470,12 +471,20 @@ async def record_patient_problem(
     # Get transcription result
     transcription_result = transcription_response.json()
 
+    # new_problem = PatientProblem(
+    #     uuid=str(uuid.uuid4()),
+    #     session_id=session_id,
+    #     patient_id=patient.patient_id,
+    #     problem_description=transcription_result
+    # )
+
     new_problem = PatientProblem(
-        uuid=str(uuid.uuid4()),
-        session_id=session_id,
-        patient_id=patient.patient_id,
-        problem_description=transcription_result
-    )
+    uuid=str(uuid.uuid4()),
+    session_id=session_id,
+    patient_id=patient.patient_id,
+    problem_description=transcription_result,
+    audio_file=file_path if audio_file else None  # Store path or None
+)
 
     db.add(new_problem)
     db.commit()
