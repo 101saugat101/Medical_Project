@@ -315,6 +315,33 @@ def get_logs_db():
 # In-memory store for authenticated users
 authenticated_users = {}
 
+
+
+
+#to get the patient details
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@app.get("/patients/{patient_id}")
+def get_patient(patient_id: str, db: Session = Depends(get_db)):
+    patient = db.query(PatientDetails).filter(PatientDetails.patient_id == patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {
+        "id": patient.id,
+        "patient_id": patient.patient_id,
+        "email": patient.email,
+        "name": patient.name,
+        "age": patient.age,
+        "gender": patient.gender,
+        "phone_number": patient.phone_number
+    }
+
 # Helper function to generate numeric session IDs
 def generate_session_id():
     return random.randint(100000, 999999)
