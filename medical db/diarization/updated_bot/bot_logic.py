@@ -508,22 +508,6 @@
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-import os
-import json
 from typing import Annotated, Literal, List
 from typing_extensions import TypedDict
 from langgraph.checkpoint.memory import MemorySaver
@@ -531,9 +515,14 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langchain_core.tools import tool
 from langchain_google_genai import ChatGoogleGenerativeAI
-from datetime import datetime
+from datetime import datetime, timedelta
+from langchain_core.tools import tool
+# from IPython.display import display
+import json
+import psycopg2
+import os
+
 
 # Configure Gemini API and the model
 google_api_key = "AIzaSyCHh4vaVl5efQ1Xza9PgovJYDApoHlJ4B8"
@@ -543,14 +532,37 @@ if not google_api_key:
 model = ChatGoogleGenerativeAI(
     model="gemini-2.0-flash",
     google_api_key=google_api_key,
+    streaming = True,
     temperature=0.1,
     max_tokens=5000,
     timeout=None,
     max_retries=2
 )
 
+# PostgreSQL database configuration - replace with your actual PostgreSQL connection details
+DB_CONFIG = {
+    'dbname': 'doctors_db',
+    'user': 'postgres',
+    'password': 'heheboii420',
+    'host': 'localhost',
+    'port': '5432'
+}
 
-class State(TypedDict):
+# Helper function to establish connection to PostgreSQL
+def get_db_connection():
+    """Create a connection to the PostgreSQL database"""
+    try:
+        print("Attempting to connect to the database...")
+        conn = psycopg2.connect(**DB_CONFIG)
+        print("Database connection successful!")
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        raise
+
+
+# Defining the state graph
+class resState(TypedDict):
     messages: Annotated[list, add_messages]
     symptoms: List[str]
     speciality: str
@@ -558,45 +570,293 @@ class State(TypedDict):
     date: str
     time: str
 
-graph_builder = StateGraph(State)
+graph_builder = StateGraph(resState)
+
+SPECIALTY_MAPPING = {
+    "orthopedist": "Osteology",
+    "cardiologist": "Cardiology",
+    "dermatologist": "Dermatology"
+}
+
+# @tool
+# def get_available_doctors(specialty: str) -> str:
+#     """Query the database to get available doctors based on specialty."""
+#     try:
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+
+#         # Map user-input specialty to database terms
+#         specialty_mapped = SPECIALTY_MAPPING.get(specialty.lower(), specialty)
+
+#         print(f"Fetching doctors for specialty: {specialty_mapped}")  # Debugging
+
+#         # Query the correct table `doctor_schedule`
+#         cursor.execute("""
+#             SELECT DISTINCT doctor_name FROM doctor_schedule WHERE specialty = %s
+#         """, (specialty_mapped,))
+
+#         doctors = cursor.fetchall()
+
+#         cursor.close()
+#         conn.close()
+
+#         print("Doctors found:", doctors)  # Debugging
+
+#         if not doctors:
+#             return f"No doctors found for {specialty}."
+
+#         result = f"Available doctors for {specialty}:\n"
+#         for doctor in doctors:
+#             result += f"- {doctor[0]}\n"
+
+#         return result
+#     except Exception as e:
+#         return f"Error querying doctors: {str(e)}"
+@tool
+def get_available_doctors(specialty: str) -> str:
+    """Query the database to get available doctors based on specialty."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Normalize input: trim spaces and convert to lowercase
+        specialty_normalized = specialty.strip().lower()
+
+        # Fetch all distinct specialties in the database
+        cursor.execute("SELECT DISTINCT LOWER(TRIM(specialty)) FROM doctor_schedule")
+        available_specialties = [row[0] for row in cursor.fetchall()]
+        print(f"📋 Available Specialties in DB: {available_specialties}")  # Debugging
+
+        # Ensure specialty exists
+        if specialty_normalized not in available_specialties:
+            return f"⚠️ Specialty '{specialty}' not found in database. Available options: {', '.join(available_specialties)}"
+
+        # Fetch doctors using case-insensitive search
+        cursor.execute("""
+            SELECT DISTINCT doctor_name FROM doctor_schedule WHERE LOWER(specialty) = LOWER(%s)
+        """, (specialty_normalized,))
+
+        doctors = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        print("✅ Doctors found:", doctors)  # Debugging
+
+        if not doctors:
+            return f"No doctors found for {specialty}."
+
+        result = f"Available doctors for {specialty.capitalize()}:\n"
+        for doctor in doctors:
+            result += f"- {doctor[0]}\n"
+
+        return result
+    except Exception as e:
+        return f"❌ Error querying doctors: {str(e)}"
 
 @tool
-def get_schedule(text:str) -> str:
+def get_doctor_availability(doctor_name: str) -> str:
     """
-        You are a medical reservation assistant tasked to book appointments.
-        Keep the conversation professional, polite.
-        Only one question/ prompt at a time. Do not create a list of questions.
-        You have to be sympathetic and say/ask reassuring questions/statements. Don't be too robotic ask generally about the patient's health and well-being.
-        Process the user input recursively and extract information from model's output.
+    Query the database to get a doctor's availability schedule.
+    
+    Args:
+        doctor_name (str): The name of the doctor
+        
+    Returns:
+        str: A formatted string with the doctor's availability
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Assumes you have a table structure with doctor-schedule relationships
+        cursor.execute('''
+        SELECT day_of_week, start_time, end_time 
+        FROM timeslots t
+        JOIN doctors d ON t.doctor_id = d.id
+        WHERE d.name = %s
+        ORDER BY 
+            CASE day_of_week
+                WHEN 'Monday' THEN 1
+                WHEN 'Tuesday' THEN 2
+                WHEN 'Wednesday' THEN 3
+                WHEN 'Thursday' THEN 4
+                WHEN 'Friday' THEN 5
+                WHEN 'Saturday' THEN 6
+                WHEN 'Sunday' THEN 7
+            END
+        ''', (doctor_name,))
+        
+        timeslots = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        if not timeslots:
+            return f"No availability found for {doctor_name}."
+        
+        result = f"Available timeslots for {doctor_name}:\n"
+        for day, start, end in timeslots:
+            result += f"- {day}: {start} to {end}\n"
+        
+        return result
+    except Exception as e:
+        return f"Error querying doctor availability: {str(e)}"
+
+
+@tool
+def get_available_slots(doctor_name: str, date_str: str) -> str:
+    """
+    Query the database to find available time slots for a specific doctor on a specific date.
+    
+    Args:
+        doctor_name (str): The name of the doctor
+        date_str (str): The date in "YYYY-MM-DD" format
+        
+    Returns:
+        str: A formatted string with available time slots
+    """
+    try:
+        # Parse the date string to get the day of week
+        date_obj = datetime.strptime(date_str, "%Y-%m-%d")
+        day_of_week = date_obj.strftime("%A")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get doctor's regular hours for that day
+        cursor.execute('''
+        SELECT start_time, end_time 
+        FROM timeslots t
+        JOIN doctors d ON t.doctor_id = d.id
+        WHERE d.name = %s AND t.day_of_week = %s
+        ''', (doctor_name, day_of_week))
+        
+        regular_hours = cursor.fetchall()
+        
+        if not regular_hours:
+            cursor.close()
+            conn.close()
+            return f"{doctor_name} does not work on {day_of_week}."
+        
+        # Get doctor ID
+        cursor.execute('SELECT id FROM doctors WHERE name = %s', (doctor_name,))
+        doctor_id = cursor.fetchone()[0]
+        
+        # Get existing appointments for that day
+        cursor.execute('''
+        SELECT time 
+        FROM appointments 
+        WHERE doctor_id = %s AND date = %s
+        ''', (doctor_id, date_str))
+        
+        booked_times = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        conn.close()
+        
+        # Generate available slots based on regular hours minus booked appointments
+        available_slots = []
+        for start_time, end_time in regular_hours:
+            # Convert times to datetime objects for comparison
+            start_dt = datetime.strptime(start_time, "%I:%M %p")
+            end_dt = datetime.strptime(end_time, "%I:%M %p")
+            
+            # Generate 30-minute slots
+            current = start_dt
+            while current + timedelta(minutes=30) <= end_dt:
+                slot = current.strftime("%I:%M %p")
+                if slot not in booked_times:
+                    available_slots.append(slot)
+                current += timedelta(minutes=30)
+        
+        if not available_slots:
+            return f"No available slots for {doctor_name} on {date_str}."
+        
+        result = f"Available slots for {doctor_name} on {date_str} ({day_of_week}):\n"
+        for slot in available_slots:
+            result += f"- {slot}\n"
+        
+        return result
+    except ValueError:
+        return "Invalid date format. Please use YYYY-MM-DD format."
+    except Exception as e:
+        return f"Error querying available slots: {str(e)}"
+
+
+@tool
+def book_appointment(doctor_name: str, date_str: str, time_str: str, patient_name: str = "Patient") -> str:
+    """
+    Book an appointment in the database.
+    
+    Args:
+        doctor_name (str): The name of the doctor
+        date_str (str): The date in "YYYY-MM-DD" format
+        time_str (str): The time of the appointment
+        patient_name (str): The name of the patient
+        
+    Returns:
+        str: Confirmation message
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get doctor ID
+        cursor.execute('SELECT id, specialty FROM doctors WHERE name = %s', (doctor_name,))
+        result = cursor.fetchone()
+        
+        if not result:
+            cursor.close()
+            conn.close()
+            return f"Doctor {doctor_name} not found."
+        
+        doctor_id, specialty = result
+        
+        # Check if slot is available (not already booked)
+        cursor.execute('''
+        SELECT id FROM appointments 
+        WHERE doctor_id = %s AND date = %s AND time = %s
+        ''', (doctor_id, date_str, time_str))
+        
+        if cursor.fetchone():
+            cursor.close()
+            conn.close()
+            return f"The slot at {time_str} on {date_str} is already booked. Please select another time."
+        
+        # Book the appointment
+        cursor.execute('''
+        INSERT INTO appointments (doctor_id, patient_name, date, time, status) 
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING id
+        ''', (doctor_id, patient_name, date_str, time_str, 'scheduled'))
+        
+        appointment_id = cursor.fetchone()[0]
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return f"Appointment #{appointment_id} confirmed with {doctor_name} ({specialty}) on {date_str} at {time_str}."
+    except Exception as e:
+        return f"Error booking appointment: {str(e)}"
+
+
+@tool
+def get_schedule(text: str) -> str:
+    """
+    You are a medical reservation assistant tasked to book appointments.
+    Keep the conversation professional, polite and start off with a greeting.
+    Keep each prompt under 100 characters.
+    You have to be sympathetic and say/ask reassuring questions/statements. Don't be too robotic ask generally about the patient's health and well-being.
+    Process the user input recursively and extract information from model's output.
    
-        Osteology:
-            Dr. Bruce Smith
-                Sunday and Friday, 10:00 AM - 12:00 PM
-            Dr. Emily Green
-                Tuesday, Wednesday, and Friday, 08:00 AM - 11:00 AM
-        
-        Dermatology:
-            Dr. Sarah Parker
-                Monday and Thursday, 09:00 AM - 12:00 PM
-            Dr. Laura Mitchell
-                Tuesday and Friday, 02:00 PM - 05:00 PM
-        
-        Cardiology:
-            Dr. William Brown:
-                Monday and Wednesday, 08:30 AM - 12:30 PM
-            Dr. Nancy Davis:
-                Tuesday and Friday, 09:00 AM - 01:00 PM
-            Dr. Joseph White:
-                Monday and Thursday, 02:00 PM - 05:00 PM
-
-        Based on the user input and then on above listings.
-        Ask for at least 4 symptoms, area of concern and duration, one by one, to determine the medical speciality. Should contain symptoms, area of concern, duration based on importance.
-        Based on the medical speciality select a doctor. This can be selected by the user or the model can recommend one. Only recommend one doctor at a time.
-        Ask the user for date and time of appointment. This can be selected by the user or the model can recommend one.
-        Then feed the information to the model.
-
-        If booked appointment, return the confirmation message.
-        If not booked appointment, return the extracted reservation information.
+    Ask for at least 4 symptoms, area of concern and duration, one by one, to determine the medical speciality. 
+    Should contain symptoms, area of concern, duration based on importance.
+    
+    Based on the medical speciality, use get_available_doctors() to find appropriate doctors.
+    When a doctor is selected, use get_doctor_availability() to show their schedule.
+    When a date is selected, use get_available_slots() to show available time slots.
+    Finally, use book_appointment() to confirm the booking.
+    
+    If booked appointment, return the confirmation message.
+    If not booked appointment, return the extracted reservation information.
     
     Args:
         text (str): The text output from the model containing reservation
@@ -604,16 +864,16 @@ def get_schedule(text:str) -> str:
     Returns:
         str: String containing all extracted reservation information.    
     """
-
+    return text
 
 
 @tool
-def info_in_json(symptoms: List[str], specialty: str, doctor: str, date: str, time: str, summary: str) -> str:
+def reservation_info_json(symptoms: List[str], specialty: str, doctor: str, date: str, time: str, summary: str) -> str:
     """
-        Generte a summary of all the conversation so fer realting to the issue and reservation.
-        Only run this if booking is confirmed.
-        This function takes in the details of a medical reservation 
-        and returns them as a JSON object.
+    Automatically generate a summary of all the conversation so far relating to the issue and reservation.
+    Only run this if booking is confirmed.
+    This function takes in the details of a medical reservation
+    and returns them as a JSON object.
     
     Args:
         symptoms List[str]: [symptom1, symptom2, area of concern, duration].
@@ -621,12 +881,11 @@ def info_in_json(symptoms: List[str], specialty: str, doctor: str, date: str, ti
         specialty (str): The medical specialty (e.g., cardiology, dermatology).
         date (str): The date of the appointment.
         time (str): The time of the appointment.
-        summary (str): The summary of the reservation based on all imformation collected.
+        summary (str): The summary of the reservation based on all information collected.
     
     Returns:
         str: A JSON string with the reservation details.
     """
-
     timestamp = datetime.now().isoformat()
 
     reservation_info = {
@@ -643,28 +902,36 @@ def info_in_json(symptoms: List[str], specialty: str, doctor: str, date: str, ti
     json_string = json.dumps(reservation_info, indent=4)
     
     # Save to a file
-    filename = f"appointment_{date.replace('/', '_')}_{time.replace(':', '_')}.json"
+    filename = f"appointment_{specialty.replace('/', '_')}_{time.replace(':', '_')}.json"
     with open(filename, 'w') as file:
         file.write(json_string)
     
     return json_string
 
 
+# Update the tools list to include the database tools
+tools = [
+    get_schedule, 
+    reservation_info_json, 
+    get_available_doctors, 
+    get_doctor_availability, 
+    get_available_slots,
+    book_appointment
+]
 
-tools = [get_schedule, info_in_json]
 model_with_tools = model.bind_tools(tools)
 
 tool_node = ToolNode(tools)
 graph_builder.add_node("tool_node", tool_node)
 
-def chatbot(state: State):
+def chatbot(state: resState):
     current_timestamp = datetime.now().isoformat()
     state["timestamp"] = current_timestamp
     return {"messages": [model_with_tools.invoke(state["messages"])]}
 
 graph_builder.add_node("chatbot", chatbot)
 
-def conditional_edge(state: State) -> Literal["tool_node", "__end__"]:
+def conditional_edge(state: resState) -> Literal["tool_node", "__end__"]:
     last_message = state["messages"][-1]
     return "tool_node" if last_message.tool_calls else "__end__"
 
@@ -685,3 +952,4 @@ if __name__ == "__main__":
         response = graph.invoke({"messages": [user_input]}, config=config)
         print("Bot:", response["messages"][-1].content)
         print('-' * 20)
+ 
