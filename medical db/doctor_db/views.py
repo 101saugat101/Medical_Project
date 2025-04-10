@@ -2,6 +2,9 @@ from fastapi import FastAPI
 import asyncpg
 from pydantic import BaseModel
 from typing import List, Optional
+from pydantic import BaseModel, validator
+from typing import Optional
+
 
 app = FastAPI()
 
@@ -29,19 +32,6 @@ class DoctorDashboard(BaseModel):
 async def get_db_connection():
     conn = await asyncpg.connect(DATABASE_URL)
     return conn
-
-
-
-
-
-
-
-from pydantic import BaseModel, validator
-from typing import Optional
-
-
-
-
 
 
 
